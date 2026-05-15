@@ -50,8 +50,8 @@ Claude / Cursor / any MCP client
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/sparksbenjamin/tennable.sc-mcp.git
-cd tennable.sc-mcp
+git clone https://github.com/sparksbenjamin/tenable.sc-mcp.git
+cd tenable.sc-mcp
 cp .env.example .env
 ```
 
@@ -98,7 +98,7 @@ In Cursor Settings → MCP, add a new server with the URL `http://localhost:8080
 If you don't want to build from source, pull the published image directly:
 
 ```bash
-docker pull ghcr.io/sparksbenjamin/tennable.sc-mcp:latest
+docker pull ghcr.io/sparksbenjamin/tenable.sc-mcp:latest
 ```
 
 Then run with just a `.env` file — no source code needed:
@@ -109,7 +109,7 @@ docker run -d \
   --restart unless-stopped \
   -p 8080:8080 \
   --env-file .env \
-  ghcr.io/sparksbenjamin/tennable.sc-mcp:latest
+  ghcr.io/sparksbenjamin/tenable.sc-mcp:latest
 ```
 
 Or with `docker-compose.prod.yml`:
