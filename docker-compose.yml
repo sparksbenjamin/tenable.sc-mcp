@@ -1,0 +1,27 @@
+services:
+  tenable-sc-mcp:
+    build: .
+    # image: ghcr.io/sparksbenjamin/tenable.sc-mcp:latest
+    container_name: tenable-sc-mcp
+    restart: unless-stopped
+    ports:
+      - "${MCP_PORT:-8080}:${MCP_PORT:-8080}"
+    environment:
+      SC_HOST: ${SC_HOST}
+      SC_USERNAME: ${SC_USERNAME}
+      SC_PASSWORD: ${SC_PASSWORD}
+      SC_PORT: ${SC_PORT:-443}
+      SC_VERIFY_SSL: ${SC_VERIFY_SSL:-true}
+      SC_TIMEOUT: ${SC_TIMEOUT:-30}
+      MCP_TRANSPORT: ${MCP_TRANSPORT:-streamable-http}
+      MCP_HOST: 0.0.0.0
+      MCP_PORT: ${MCP_PORT:-8080}
+      MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-}
+      MCP_STATELESS: ${MCP_STATELESS:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:${MCP_PORT:-8080}/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

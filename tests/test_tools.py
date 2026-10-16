@@ -525,3 +525,35 @@ class TestReviewFixes:
             "kind": "scan_result", "object_id": "9", "download_type": "diagnostic",
         })
         assert backend.calls[0]["json"] == {"downloadType": "diagnostic"}
+
+
+class TestHostHeaderDefaults:
+    """Wildcard binds must not lock out HTTP clients (DNS-rebinding config)."""
+
+    def _resolve(self, monkeypatch, **env):
+        import importlib
+        import main as main_mod
+        for k, v in env.items():
+            monkeypatch.setenv(k, v)
+        importlib.reload(main_mod)
+        return main_mod
+
+    def test_wildcard_bind_accepts_loopback_headers(self, monkeypatch):
+        main_mod = self._resolve(monkeypatch)
+        hosts = main_mod._default_allowed_hosts("0.0.0.0", 8080)
+        # curl/browser hitting localhost or 127.0.0.1 must pass
+        assert "127.0.0.1:8080" in hosts
+        assert "localhost:8080" in hosts
+        assert "localhost" in hosts and "127.0.0.1" in hosts
+
+    def test_named_bind_accepts_its_name(self, monkeypatch):
+        main_mod = self._resolve(monkeypatch)
+        hosts = main_mod._default_allowed_hosts("sc.internal", 8443)
+        assert "sc.internal" in hosts and "sc.internal:8443" in hosts
+
+    def test_explicit_allowlist_wins(self, monkeypatch):
+        # _default is only the fallback; explicit MCP_ALLOWED_HOSTS is read directly
+        main_mod = self._resolve(monkeypatch, MCP_ALLOWED_HOSTS="proxy.corp:443")
+        import os
+        raw = [h.strip() for h in os.environ.get("MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]
+        assert raw == ["proxy.corp:443"]
