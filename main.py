@@ -1,8 +1,17 @@
 """
-Tenable.sc MCP Server — SSE Transport
---------------------------------------
+Tenable.sc MCP Server
+----------------------
 Required env vars: SC_HOST, SC_USERNAME, SC_PASSWORD
-Optional:          SC_PORT, SC_VERIFY_SSL, MCP_HOST, MCP_PORT, LOG_LEVEL
+Optional:          SC_PORT, SC_VERIFY_SSL, SC_TIMEOUT, LOG_LEVEL
+Transport env:      MCP_TRANSPORT (stdio | streamable-http | sse)
+                    MCP_HOST, MCP_PORT
+                    MCP_ALLOWED_HOSTS (comma-separated; enables DNS-rebinding protection)
+                    MCP_STATELESS (true to run stateless streamable-http)
+
+Supports three transports:
+  - stdio             — for Claude Desktop / local MCP clients
+  - streamable-http   — for remote deployments (Docker default)
+  - sse               — legacy SSE transport
 """
 
 import asyncio
@@ -11,7 +20,6 @@ import os
 import signal
 import sys
 
-from mcp.server.fastmcp import FastMCP
 from session import session
 from tools import register_all
 
@@ -27,26 +35,44 @@ if _missing:
     logger.error("Missing required environment variables: %s", ", ".join(_missing))
     sys.exit(1)
 
-mcp = FastMCP(
-    name="tenable-sc",
-    instructions=(
-        "You are connected to a Tenable.sc (SecurityCenter) instance. "
-        "Use the available tools to query vulnerabilities, manage scans, "
-        "review assets, and analyze security posture. "
-        "Always confirm destructive operations before executing them."
-    ),
-)
 
-register_all(mcp)
+def _make_server():
+    """Create the MCPServer on both mcp>=2 and mcp 1.x layouts."""
+    try:
+        # mcp >= 2: FastMCP was renamed MCPServer
+        from mcp.server.mcpserver import MCPServer
+    except ImportError:
+        try:
+            # mcp 1.x
+            from mcp.server.fastmcp import FastMCP as MCPServer
+        except ImportError as e:
+            raise RuntimeError(
+                "Could not import an MCP server class — is 'mcp' installed?"
+            ) from e
+
+    mcp = MCPServer(
+        name="tenable-sc",
+        instructions=(
+            "You are connected to a Tenable.sc (SecurityCenter) instance. "
+            "Use the available tools to CRUD resources, run analysis queries, "
+            "launch scans, download reports, and manage platform configuration. "
+            "Always confirm destructive operations before executing them."
+        ),
+    )
+    register_all(mcp)
+    return mcp
 
 
 async def main():
+    transport = os.environ.get("MCP_TRANSPORT", "streamable-http").lower()
     host = os.environ.get("MCP_HOST", "0.0.0.0")
     port = int(os.environ.get("MCP_PORT", "8080"))
 
+    mcp = _make_server()
+
     logger.info(
-        "Starting Tenable.sc MCP SSE server on %s:%d (targeting SC at %s)",
-        host, port, os.environ["SC_HOST"],
+        "Starting Tenable.sc MCP server (%s) targeting SC at %s",
+        transport, os.environ["SC_HOST"],
     )
 
     loop = asyncio.get_running_loop()
@@ -57,12 +83,49 @@ async def main():
         loop.stop()
 
     for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(
-            sig, lambda s=sig.name: asyncio.create_task(_shutdown(s))
-        )
+        try:
+            loop.add_signal_handler(
+                sig, lambda s=sig.name: asyncio.create_task(_shutdown(s))
+            )
+        except NotImplementedError:
+            # Windows / restricted environments
+            pass
 
-    await mcp.run_sse_async(host=host, port=port)
+    if transport == "stdio":
+        # stdio does not use the HTTP shutdown path
+        try:
+            await mcp.run_stdio_async()
+        finally:
+            await session.logout()
+        return
+
+    from mcp.server.transport_security import TransportSecuritySettings
+
+    allowed_hosts = [
+        h.strip() for h in os.environ.get("MCP_ALLOWED_HOSTS", "").split(",") if h.strip()
+    ]
+    security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=allowed_hosts or [f"{host}:{port}"],
+        allowed_origins=[],
+    )
+
+    stateless = os.environ.get("MCP_STATELESS", "").lower() in ("1", "true", "yes")
+
+    if transport == "sse":
+        await mcp.run_sse_async(host=host, port=port)
+    else:
+        await mcp.run_streamable_http_async(
+            host=host,
+            port=port,
+            json_response=False,
+            stateless_http=stateless,
+            transport_security=security,
+        )
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
