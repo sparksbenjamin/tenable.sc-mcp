@@ -11,13 +11,13 @@ import logging
 
 from mcp.server.mcpserver import MCPServer
 
-from tools import generic
+from tools import generic, scans
 
 logger = logging.getLogger(__name__)
 
 _TOOL_MODULES = [
     generic.register,
-    # domain modules are appended by their respective PRs
+    scans.register,
 ]
 
 
