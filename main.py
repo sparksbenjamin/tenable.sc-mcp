@@ -60,6 +60,18 @@ def _make_server():
         ),
     )
     register_all(mcp)
+
+    # Liveness endpoint for container orchestration (no auth by design).
+    try:
+        from starlette.requests import Request
+        from starlette.responses import JSONResponse
+
+        @mcp.custom_route("/health", methods=["GET"])
+        async def health(_request: Request) -> JSONResponse:
+            return JSONResponse({"status": "ok"})
+    except Exception:  # pragma: no cover — custom_route is mcp>=2 only
+        logger.debug("custom_route unavailable; /health not registered")
+
     return mcp
 
 
