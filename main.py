@@ -36,6 +36,25 @@ if _missing:
     sys.exit(1)
 
 
+def _default_allowed_hosts(host: str, port: int) -> list[str]:
+    """Host-header allowlist when MCP_ALLOWED_HOSTS is unset.
+
+    A wildcard bind address (0.0.0.0 / ::) never appears in a Host header,
+    so using it literally would reject every HTTP client. Accept the
+    loopback names clients actually send; proxy-fronted deployments should
+    set MCP_ALLOWED_HOSTS explicitly.
+    """
+    if host in ("0.0.0.0", "::", ""):
+        return [
+            "localhost",
+            "127.0.0.1",
+            f"[::1]:{port}",
+            f"127.0.0.1:{port}",
+            f"localhost:{port}",
+        ]
+    return [host, f"{host}:{port}"]
+
+
 def _make_server():
     """Create the MCPServer on both mcp>=2 and mcp 1.x layouts."""
     try:
@@ -115,10 +134,10 @@ async def main():
 
     allowed_hosts = [
         h.strip() for h in os.environ.get("MCP_ALLOWED_HOSTS", "").split(",") if h.strip()
-    ]
+    ] or _default_allowed_hosts(host, port)
     security = TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
-        allowed_hosts=allowed_hosts or [f"{host}:{port}"],
+        allowed_hosts=allowed_hosts,
         allowed_origins=[],
     )
 
