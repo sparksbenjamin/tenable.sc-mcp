@@ -11,13 +11,14 @@ import logging
 
 from mcp.server.mcpserver import MCPServer
 
-from tools import generic, scans
+from tools import assets, generic, scans
 
 logger = logging.getLogger(__name__)
 
 _TOOL_MODULES = [
     generic.register,
     scans.register,
+    assets.register,
 ]
 
 
