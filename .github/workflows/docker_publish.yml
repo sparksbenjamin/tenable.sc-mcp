@@ -14,7 +14,50 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest pytest-asyncio
+
+      - name: Run tests
+        env:
+          SC_HOST: sc.example.test
+          SC_USERNAME: test-user
+          SC_PASSWORD: test-pass
+        run: python -m pytest tests/ -v
+
+      - name: Import smoke test (server constructs + registers tools)
+        env:
+          SC_HOST: sc.example.test
+          SC_USERNAME: test-user
+          SC_PASSWORD: test-pass
+        run: |
+          python - <<'EOF'
+          import asyncio
+          from mcp.server.mcpserver import MCPServer
+          from tools import register_all
+
+          mcp = MCPServer(name="ci", instructions="ci")
+          register_all(mcp)
+          tools = asyncio.run(mcp.list_tools())
+          assert len(tools) >= 10, f"expected >=10 tools, got {len(tools)}"
+          print(f"OK: {len(tools)} tools registered")
+          EOF
+
   build-and-push:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
