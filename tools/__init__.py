@@ -11,7 +11,7 @@ import logging
 
 from mcp.server.mcpserver import MCPServer
 
-from tools import assets, generic, policies, repositories, scans
+from tools import assets, generic, policies, repositories, reports, scans
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +21,7 @@ _TOOL_MODULES = [
     assets.register,
     policies.register,
     repositories.register,
+    reports.register,
 ]
 
 
